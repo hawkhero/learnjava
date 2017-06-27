@@ -9,6 +9,9 @@ import org.junit.Test;
 
 public class LambdaTest {
 
+	/**
+	 * r2 是屬於匿名 inner class
+	 */
 	@Test
 	public void compareThreadLambda(){
 		Runnable r1 = () -> System.out.println("r1: " + this.getClass());
@@ -20,7 +23,7 @@ public class LambdaTest {
 		};
 
 		Runnable r3 = () -> {
-			HelloFuture.pauseSecond(2);
+			CompletableFutureTest.sleepSecond(2);
 			System.out.println("r3: " + this.getClass());
 		};
 		
@@ -29,26 +32,27 @@ public class LambdaTest {
 		new Thread(r1).start();
 	}
 	
+	// 以下是4種函數介面
+	
 	@Test
-	void consumer(){
+	public void consumer(){
 		Arrays.asList("Justin", "Monica", "Irene")
 		.forEach(System.out::println); //pass a method reference, lambda 
 	}
 	
-	//receive a parameter and return
 	@Test
-	void function(){
+	public void function(){
 		out.println(Optional.of("my name").map(String::toUpperCase).get());
 	}
 	
 	@Test
-	void predicate(){
+	public void predicate(){
 		Stream.of("Albee","Justin", "Monica", "Irene").filter(name -> name.endsWith("e"))
 			.forEach(out::println);
 	}
 	
 	@Test
-	void supplier(){
+	public void supplier(){
 		Stream.generate(Math::random).limit(5).forEach(out::println);
 	}
 }

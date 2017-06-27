@@ -1,15 +1,50 @@
 package future;
 
+import static java.lang.System.out;
+import static java.lang.Thread.sleep;
+import static org.hamcrest.CoreMatchers.is;
+
+import java.util.Arrays;
 import java.util.concurrent.*;
 
-import org.junit.Test;
+import org.junit.*;
 
-import static java.lang.System.out;
-import static java.lang.Thread.*;
-
-public class HelloFuture {
+public class CompletableFutureTest {
 	static ExecutorService threadPool = Executors.newCachedThreadPool();
 	
+	
+	/**
+	 * 將 2 個 CompletableFuture 的結果合併
+	 * @throws Exception
+	 */
+	@Test
+	public void combine() throws Exception {
+		CompletableFuture<String> firstTask = CompletableFuture.supplyAsync(() -> "combine all");
+		CompletableFuture<String> secondTask = CompletableFuture.supplyAsync(() ->  "task results");
+
+		CompletableFuture<String> combined = firstTask.thenCombineAsync(secondTask, (f, s) -> f + " " + s);
+
+		Assert.assertThat(combined.get(), is("combine all task results"));
+	}
+	
+	/**
+	 * 將一個 CompletableFuture 結果傳給另一個 CompletableFuture 做輸入
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
+	@Test
+	public void compose() throws InterruptedException, ExecutionException {
+		//1st Future
+		 CompletableFuture<Integer> summedNumbers = CompletableFuture.supplyAsync(() ->{
+			return Arrays.asList(1,2,3,4,5,6,7,8,9,10);
+		})
+		.thenComposeAsync((numbers) -> {
+			//需回傳 2nd Future
+			return CompletableFuture.supplyAsync(() -> numbers.stream().mapToInt(Integer::intValue).sum());
+		});
+
+		Assert.assertThat(summedNumbers.get(), is(55));
+	}
 
 	@Test
 	public void handleError() throws InterruptedException, ExecutionException {
@@ -22,11 +57,11 @@ public class HelloFuture {
 			return null;
 		});
 		out.println(">>handle error");
-		pauseSecond(1);
+		sleepSecond(1);
 	}
 
 	@Test
-	public void combine() throws InterruptedException, ExecutionException{
+	public void runOneByOne() throws InterruptedException, ExecutionException{
 		CompletableFuture<Void> future = CompletableFuture
 		.runAsync(() -> {
 			try{
@@ -58,7 +93,7 @@ public class HelloFuture {
 	}
 
 	@Test
-	private void incorrect() throws InterruptedException, ExecutionException{
+	public void incorrect() throws InterruptedException, ExecutionException{
 		CompletableFuture.runAsync(() -> {
 			try {
 				Thread.sleep(1000);
@@ -70,11 +105,11 @@ public class HelloFuture {
 			//不會印出結果，因為前一步是 runAsync()， run 開頭的 method 是沒有回傳值，因此接收回傳值的 accept method 不會被呼叫
 			System.out.println(result); 
 		});
-		pauseSecond(1);
+		sleepSecond(1);
 	}
 	
 	@Test
-	void supplyAsync() throws InterruptedException{
+	public void supplyAsync() throws InterruptedException{
 		CompletableFuture.supplyAsync(() -> {
 			try {
 				out.println(Thread.currentThread());
@@ -90,23 +125,33 @@ public class HelloFuture {
 		}).thenAccept(System.out::println);
 		
 		out.println(">>supplyAsync "+Thread.currentThread());
-		pauseSecond(1);
+		sleepSecond(1);
 	}
 	
-	//
+
+	@Test
+	public void runAsyncJoin(){
+		CompletableFuture.runAsync(() -> {
+			sleepSecond(2);
+			System.out.println("running async task");
+		})
+		.join();
+		System.out.println(">>>async join");
+	}
+	
 	/**
 	 * 參考： http://codingjunkie.net/completable-futures-part1/
 	 * By default, CompletableFuture runs in the ForkJoinPool.commonPool(). This pool is statically constructed; 
 	 * its run state is unaffected by attempts to shutdown() or shutdownNow(). 
 	 *  However this pool and any ongoing processing are automatically terminated upon program System.exit(int). 
 	 *  Any program that relies on asynchronous task processing to complete before program termination should invoke commonPool().awaitQuiescence, before exit.
-	 *  所以如果沒有將 thread 暫停，程式直接終止就來不急跑傳給 runAsync() 的 runnable lambda
-	 *  
+	 *  所以如果沒有將 calling thread 暫停，程式直接終止，傳給 runAsync() 的 runnable lambda 就來不及執行
 	 */
 	@Test
-	void runAsync(){
+	public void runAsync(){
 		CompletableFuture<Void> runAsync = CompletableFuture.runAsync(() -> System.out.println("running async task"));
-		pauseSecond(1);
+//		out.println(">>runAsync "+Thread.currentThread());
+		sleepSecond(1);
 	}
 	
 	/**
@@ -114,36 +159,41 @@ public class HelloFuture {
 	 * 這個例子跑在另一個 thread pool 中，因此不會受到原有 main thread終止的影響
 	 */
 	@Test
-	void runAsyncExecutor(){
+	public void runAsyncExecutor(){
 		 CompletableFuture.runAsync(() -> System.out.println("running async task in another pool"), threadPool);
 	}
 	
-	static void pauseSecond(int sec){
-		try{
-			Thread.sleep(1000 * sec);
-		}catch(InterruptedException e){
-			e.printStackTrace();
-		}
-	}
 	/**
-	 * get() blocks the  thread.
+	 * world 先印出 
+	 */
+	@Test
+	public void asyncHello() {
+		CompletableFuture.runAsync(() -> System.out.println("hello"));
+		System.out.println("world");
+	}
+	
+	/**
+	 * get() 會等 CompletableFuture 做完才執行下一行
 	 * @throws InterruptedException
 	 * @throws ExecutionException
 	 */
 	@Test
-	void sync() throws InterruptedException, ExecutionException {
+	public void sync() throws InterruptedException, ExecutionException {
 		CompletableFuture<Void> future =
 				CompletableFuture.runAsync(() -> {
-					try {
-						Thread.sleep(1000);
-						System.out.println("hello");
-					} catch (InterruptedException e) {
-						e.printStackTrace();
-					}
+					sleepSecond(2);
+					System.out.println("hello");
 				});
 
 		future.get(); //the thread waits here
 		System.out.println("world");
 	}
-
+	
+	static void sleepSecond(int sec){
+		try{
+			TimeUnit.SECONDS.sleep(sec);
+		}catch(InterruptedException e){
+			e.printStackTrace();
+		}
+	}
 }

@@ -5,16 +5,11 @@ import static java.lang.System.out;
 import java.util.*;
 import java.util.stream.Stream;
 
+import org.junit.Test;
+
 public class LambdaTest {
 
-	public static void main(String[] args) {
-//		new LambdaTest().compareThreadLambda();
-//		consumer();
-//		function();
-//		predicate();
-		supplier();
-	}
-	
+	@Test
 	public void compareThreadLambda(){
 		Runnable r1 = () -> System.out.println("r1: " + this.getClass());
 		
@@ -23,27 +18,37 @@ public class LambdaTest {
 				System.out.println("r2: " + this.getClass());
 			}
 		};
+
+		Runnable r3 = () -> {
+			HelloFuture.pauseSecond(2);
+			System.out.println("r3: " + this.getClass());
+		};
 		
-		new Thread(r1).start();
+		new Thread(r3).start();
 		new Thread(r2).start();
+		new Thread(r1).start();
 	}
 	
-	static void consumer(){
+	@Test
+	void consumer(){
 		Arrays.asList("Justin", "Monica", "Irene")
 		.forEach(System.out::println); //pass a method reference, lambda 
 	}
 	
 	//receive a parameter and return
-	static void function(){
+	@Test
+	void function(){
 		out.println(Optional.of("my name").map(String::toUpperCase).get());
 	}
 	
-	static void predicate(){
+	@Test
+	void predicate(){
 		Stream.of("Albee","Justin", "Monica", "Irene").filter(name -> name.endsWith("e"))
 			.forEach(out::println);
 	}
 	
-	static void supplier(){
+	@Test
+	void supplier(){
 		Stream.generate(Math::random).limit(5).forEach(out::println);
 	}
 }

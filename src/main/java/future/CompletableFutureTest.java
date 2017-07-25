@@ -4,10 +4,9 @@ import static java.lang.System.out;
 import static java.lang.Thread.sleep;
 import static org.hamcrest.CoreMatchers.is;
 
-
 import java.util.*;
 import java.util.concurrent.*;
-
+import java.util.function.*;
 
 import org.junit.*;
 
@@ -113,7 +112,8 @@ public class CompletableFutureTest {
 	}
 	
 	/**
-	 * 非同步、照順序 then 開頭 method, thenYYY(),  會等前面執行完再執行
+	 * 非同步、照順序
+	 * then 開頭 method, thenYYY(),  會等前面執行完再執行
 	 * 如果用 runAsync() 就不會等前一個
 	 * @throws InterruptedException
 	 * @throws ExecutionException
@@ -150,39 +150,6 @@ public class CompletableFutureTest {
 		sleepSecond(5);
 	}
 	
-	
-	/**
-	 * 將 2 個 CompletableFuture 的結果合併
-	 * @throws Exception
-	 */
-	@Test
-	public void combine() throws Exception {
-		CompletableFuture<String> firstTask = CompletableFuture.supplyAsync(() -> "combine all");
-		CompletableFuture<String> secondTask = CompletableFuture.supplyAsync(() ->  "task results");
-
-		CompletableFuture<String> combined = firstTask.thenCombineAsync(secondTask, (f, s) -> f + " " + s);
-
-		Assert.assertThat(combined.get(), is("combine all task results"));
-	}
-	
-	/**
-	 * 將一個 CompletableFuture 結果傳給另一個 CompletableFuture 做輸入
-	 * @throws InterruptedException
-	 * @throws ExecutionException
-	 */
-	@Test
-	public void compose() throws InterruptedException, ExecutionException {
-		//1st Future
-		 CompletableFuture<Integer> summedNumbers = CompletableFuture.supplyAsync(() ->{
-			return Arrays.asList(1,2,3,4,5,6,7,8,9,10);
-		})
-		.thenComposeAsync((numbers) -> {
-			//需回傳 2nd Future
-			return CompletableFuture.supplyAsync(() -> numbers.stream().mapToInt(Integer::intValue).sum());
-		});
-
-		Assert.assertThat(summedNumbers.get(), is(55));
-	}
 
 	@Test
 	public void handleError() throws InterruptedException, ExecutionException {
@@ -192,9 +159,9 @@ public class CompletableFutureTest {
 			error.printStackTrace();
 			return null;
 		});
-		out.println(">>handle error");
 		sleepSecond(1);
-	}
+	}	
+	
 	
 	/**
 	 * whenComplete() is a flexible way to handle result/exception
@@ -225,53 +192,96 @@ public class CompletableFutureTest {
 		out.println(">>handle errors or result");
 		sleepSecond(1);
 	}
+	
+	/**
+	 * 將一個 CompletableFuture 結果傳給另一個 CompletableFuture 做輸入，兩者要照順序執行
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
+	@Test
+	public void compose() throws InterruptedException, ExecutionException {
+		//1st Future
+		 CompletableFuture<Integer> summedNumbers = CompletableFuture.supplyAsync(() ->{
+			return Arrays.asList(1,2,3,4,5,6,7,8,9,10);
+		})
+		.thenComposeAsync((numbers) -> {
+			//需回傳 2nd Future
+			return CompletableFuture.supplyAsync(() -> numbers.stream().mapToInt(Integer::intValue).sum());
+		});
 
+		Assert.assertThat(summedNumbers.get(), is(55));
+	}
 
 	@Test
-	public void incorrect() throws InterruptedException, ExecutionException{
-		CompletableFuture.runAsync(() -> {
-			try {
-				Thread.sleep(1000);
-				out.println("hello");
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			}
-		}).thenAccept(result -> {
-			//不會印出結果，因為前一步是 runAsync()， run 開頭的 method 是沒有回傳值，因此接收回傳值的 accept method 不會被呼叫
-			System.out.println(result); 
-		});
-		sleepSecond(1);
+	public void compose2() throws InterruptedException, ExecutionException {
+		CompletableFuture<String> completableFuture = 
+			CompletableFuture.supplyAsync(() -> "Hello")
+		    .thenCompose(s -> CompletableFuture.supplyAsync(() -> s + " World"));
+		 
+		Assert.assertEquals("Hello World", completableFuture.get());
+
+	}
+
+	/**
+	 * 將 2 個獨立執行的 CompletableFuture 的結果合併
+	 * @throws Exception
+	 */
+	@Test
+	public void combine() throws Exception {
+		CompletableFuture<String> firstTask = CompletableFuture.supplyAsync(() -> "combine all");
+		CompletableFuture<String> secondTask = CompletableFuture.supplyAsync(() ->  "task results");
+
+		CompletableFuture<String> combined = firstTask.thenCombineAsync(secondTask, (f, s) -> f + " " + s);
+
+		Assert.assertThat(combined.get(), is("combine all task results"));
+	}
+
+	
+	
+	@Test
+	public void templateMethodCase1() throws InterruptedException, ExecutionException {
+		CompletableFuture<String> async = CompletableFuture.supplyAsync(() -> {
+			System.out.println("async operation");
+			sleepSecond(1);
+			return "DONE";});
+
+		async.thenCompose(templateMethod(this::updateUi))
+		.whenComplete((val, ex) -> ex.printStackTrace());
+
+		sleepSecond(2);
+	}
+
+	public void updateUi(String value) {
+		System.out.println(value);
+//		throw new RuntimeException("problem");
+	}
+
+	public <T>Function<T, CompletionStage<Void>> templateMethod(Consumer<T> consumer) {
+		return (value) -> CompletableFuture.runAsync(() -> System.out.println("activate"))
+				.thenRun(() -> consumer.accept(value))
+				.whenComplete((res, err) -> System.out.println("deactivate"));
 	}
 	
-	/*
-	 @Test
- public void complFutTest() throws InterruptedException, ExecutionException {
-  CompletableFuture<String> async = CompletableFuture.supplyAsync(() -> {
-    Threads.sleep(100);
-    System.out.println("before");
-    Threads.sleep(1000);
-    System.out.println("after");
-    return "DONE";});
-  
-  async.thenCompose(doActivated(this::updateUi))
-    .whenComplete((val, ex) -> ex.printStackTrace());
-
-  Threads.sleep(2000);
- }
- 
- public void updateUi(String value) {
-  System.out.println(value);
-  throw new RuntimeException("problem");
- }
- 
- public <T>Function<T, CompletionStage<Void>> doActivated(Consumer<T> consumer) {
-  System.out.println("prepareActivated");
-  return (value) -> CompletableFuture.runAsync(() -> System.out.println("activate"))
-    .thenRun(() -> consumer.accept(value))
-    .whenComplete((res, err) -> System.out.println("deactivate"));
- }
- */
 	
+	@Test
+	public void templateMethodCase2() throws InterruptedException, ExecutionException {
+		CompletableFuture<String> async = CompletableFuture.supplyAsync(() -> {
+			System.out.println("async operation");
+			sleepSecond(1);
+			return "DONE";});
+		templateMethod(this::updateUi);
+//		templateMethod2(this::updateUi, "");
+//		async.thenCompose((range) -> templateMethod2(this::updateUi, range))
+//		.whenComplete((val, ex) -> ex.printStackTrace());
+
+		sleepSecond(2);
+	}
+	
+	public CompletableFuture templateMethod2(Consumer consumer, Object data) {
+		return CompletableFuture.runAsync(() -> System.out.println("activate"))
+				.thenRun(() -> consumer.accept(data))
+				.whenComplete((res, err) -> System.out.println("deactivate"));
+	}
 	
 	static void sleepSecond(int sec){
 		try{
